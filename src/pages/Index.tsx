@@ -1,16 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Header } from '@/components/Header';
 import { HeroSection } from '@/components/HeroSection';
 import { CategoriesSection } from '@/components/CategoriesSection';
 import { AdsSection } from '@/components/AdsSection';
 import { ChatSupportSection } from '@/components/ChatSupportSection';
 import { Footer } from '@/components/Footer';
+import { AdminPanel } from '@/components/AdminPanel';
+import { database, User, Ad } from '@/lib/database';
 
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState('');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [ads, setAds] = useState<Ad[]>([]);
   
   // Form states
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -33,62 +36,49 @@ const Index = () => {
     { name: 'Услуги', icon: 'Wrench', count: 743 }
   ];
 
-  const [featuredAds, setFeaturedAds] = useState([
-    {
-      id: 1,
-      title: 'Toyota Camry 2020',
-      price: '2 500 000 ₽',
-      location: 'Москва',
-      image: 'img/82a34ebc-aec4-4a9e-8dfe-870716c27880.jpg',
-      category: 'Автомобили',
-      isVip: true,
-      views: 1234,
-      description: 'Отличный автомобиль в идеальном состоянии',
-      phone: '+7 (999) 123-45-67'
-    },
-    {
-      id: 2,
-      title: '3-комнатная квартира в центре',
-      price: '15 000 000 ₽',
-      location: 'Санкт-Петербург',
-      image: 'img/82a34ebc-aec4-4a9e-8dfe-870716c27880.jpg',
-      category: 'Недвижимость',
-      isVip: false,
-      views: 892,
-      description: 'Просторная квартира с евроремонтом',
-      phone: '+7 (911) 234-56-78'
-    },
-    {
-      id: 3,
-      title: 'iPhone 15 Pro Max',
-      price: '120 000 ₽',
-      location: 'Казань',
-      image: 'img/82a34ebc-aec4-4a9e-8dfe-870716c27880.jpg',
-      category: 'Электроника',
-      isVip: true,
-      views: 2341,
-      description: 'Новый телефон, все аксессуары в комплекте',
-      phone: '+7 (987) 345-67-89'
-    },
-    {
-      id: 4,
-      title: 'Разработка веб-сайтов',
-      price: 'от 50 000 ₽',
-      location: 'Удаленно',
-      image: 'img/82a34ebc-aec4-4a9e-8dfe-870716c27880.jpg',
-      category: 'Услуги',
-      isVip: false,
-      views: 567,
-      description: 'Профессиональная разработка сайтов',
-      phone: '+7 (900) 456-78-90'
+  useEffect(() => {
+    refreshAds();
+    
+    // Проверяем, есть ли сохранённый пользователь
+    const savedUserId = localStorage.getItem('current_user_id');
+    if (savedUserId) {
+      const user = database.getUserById(savedUserId);
+      if (user) {
+        setCurrentUser(user);
+      }
     }
-  ]);
+  }, []);
+
+  const refreshAds = () => {
+    setAds(database.getAds());
+  };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (loginForm.email && loginForm.password) {
-      setIsLoggedIn(true);
-      setUserName(loginForm.email.split('@')[0]);
+      // Проверяем админа
+      if (loginForm.email === 'admin@doska.ru' && loginForm.password === 'admin123') {
+        const adminUser = database.getUserById('admin-1');
+        if (adminUser) {
+          setCurrentUser(adminUser);
+          localStorage.setItem('current_user_id', adminUser.id);
+        }
+      } else {
+        // Обычная авторизация - ищем пользователя по email
+        const users = database.getUsers();
+        const user = users.find(u => u.email === loginForm.email);
+        if (user) {
+          if (user.isBanned) {
+            alert('Ваш аккаунт заблокирован');
+            return;
+          }
+          setCurrentUser(user);
+          localStorage.setItem('current_user_id', user.id);
+        } else {
+          alert('Пользователь не найден');
+          return;
+        }
+      }
       setLoginForm({ email: '', password: '' });
     }
   };
@@ -96,29 +86,57 @@ const Index = () => {
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
     if (registerForm.name && registerForm.email && registerForm.password && registerForm.phone) {
-      setIsLoggedIn(true);
-      setUserName(registerForm.name);
-      setRegisterForm({ name: '', email: '', password: '', phone: '' });
+      try {
+        const newUser = database.addUser({
+          name: registerForm.name,
+          email: registerForm.email,
+          phone: registerForm.phone,
+          role: 'user',
+          isBanned: false,
+          canPostAds: true
+        });
+        setCurrentUser(newUser);
+        localStorage.setItem('current_user_id', newUser.id);
+        setRegisterForm({ name: '', email: '', password: '', phone: '' });
+      } catch (error) {
+        alert('Ошибка регистрации');
+      }
     }
   };
 
   const handleAddAd = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) {
+      alert('Необходимо войти в аккаунт');
+      return;
+    }
+
+    if (!currentUser.canPostAds) {
+      alert('Вам запрещено размещать объявления');
+      return;
+    }
+
     if (adForm.title && adForm.description && adForm.price && adForm.category) {
-      const newAd = {
-        id: featuredAds.length + 1,
-        title: adForm.title,
-        price: adForm.price,
-        location: adForm.location || 'Не указано',
-        image: 'img/82a34ebc-aec4-4a9e-8dfe-870716c27880.jpg',
-        category: adForm.category,
-        isVip: false,
-        views: 0,
-        description: adForm.description,
-        phone: adForm.phone
-      };
-      setFeaturedAds([newAd, ...featuredAds]);
-      setAdForm({ title: '', description: '', price: '', category: '', location: '', phone: '' });
+      try {
+        database.addAd({
+          title: adForm.title,
+          description: adForm.description,
+          price: adForm.price,
+          category: adForm.category,
+          location: adForm.location || 'Не указано',
+          phone: adForm.phone || currentUser.phone,
+          image: 'img/82a34ebc-aec4-4a9e-8dfe-870716c27880.jpg',
+          isVip: false,
+          authorId: currentUser.id,
+          authorName: currentUser.name
+        });
+        
+        setAdForm({ title: '', description: '', price: '', category: '', location: '', phone: '' });
+        refreshAds();
+        alert('Объявление успешно добавлено!');
+      } catch (error) {
+        alert('Ошибка при добавлении объявления');
+      }
     }
   };
 
@@ -135,11 +153,17 @@ const Index = () => {
   };
 
   const logout = () => {
-    setIsLoggedIn(false);
-    setUserName('');
+    setCurrentUser(null);
+    localStorage.removeItem('current_user_id');
   };
 
-  const filteredAds = featuredAds.filter(ad => {
+  const openAdminPanel = () => {
+    if (currentUser?.role === 'admin') {
+      setShowAdminPanel(true);
+    }
+  };
+
+  const filteredAds = ads.filter(ad => {
     const matchesSearch = !searchQuery || 
       ad.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ad.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -150,8 +174,8 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-white">
       <Header
-        isLoggedIn={isLoggedIn}
-        userName={userName}
+        isLoggedIn={!!currentUser}
+        userName={currentUser?.name || ''}
         loginForm={loginForm}
         registerForm={registerForm}
         adForm={adForm}
@@ -164,10 +188,12 @@ const Index = () => {
         handleAddAd={handleAddAd}
         logout={logout}
         openTelegramSupport={openTelegramSupport}
+        isAdmin={currentUser?.role === 'admin'}
+        onOpenAdminPanel={openAdminPanel}
       />
 
       <HeroSection
-        featuredAdsLength={featuredAds.length}
+        featuredAdsLength={ads.length}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         handleSearch={handleSearch}
@@ -183,16 +209,28 @@ const Index = () => {
       <AdsSection
         filteredAds={filteredAds}
         selectedCategory={selectedCategory}
+        currentUser={currentUser}
+        onAdUpdate={refreshAds}
       />
 
       <ChatSupportSection
-        isLoggedIn={isLoggedIn}
+        isLoggedIn={!!currentUser}
         openTelegramSupport={openTelegramSupport}
       />
 
       <Footer
         openTelegramSupport={openTelegramSupport}
       />
+
+      {showAdminPanel && currentUser?.role === 'admin' && (
+        <AdminPanel
+          currentUserId={currentUser.id}
+          onClose={() => {
+            setShowAdminPanel(false);
+            refreshAds();
+          }}
+        />
+      )}
     </div>
   );
 };

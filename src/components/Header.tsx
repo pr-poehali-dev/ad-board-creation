@@ -24,6 +24,8 @@ interface HeaderProps {
   handleAddAd: (e: React.FormEvent) => void;
   logout: () => void;
   openTelegramSupport: () => void;
+  isAdmin?: boolean;
+  onOpenAdminPanel?: () => void;
 }
 
 export const Header = ({
@@ -40,7 +42,9 @@ export const Header = ({
   handleRegister,
   handleAddAd,
   logout,
-  openTelegramSupport
+  openTelegramSupport,
+  isAdmin,
+  onOpenAdminPanel
 }: HeaderProps) => {
   return (
     <header className="border-b border-gray-200 bg-white sticky top-0 z-50">

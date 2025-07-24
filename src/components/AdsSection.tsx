@@ -2,30 +2,30 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { VipUpgrade } from '@/components/VipUpgrade';
+import { User, Ad, database } from '@/lib/database';
 import Icon from '@/components/ui/icon';
 
-interface Ad {
-  id: number;
-  title: string;
-  price: string;
-  location: string;
-  image: string;
-  category: string;
-  isVip: boolean;
-  views: number;
-  description: string;
-  phone: string;
-}
+
 
 interface AdsSectionProps {
   filteredAds: Ad[];
   selectedCategory: string;
+  currentUser: User | null;
+  onAdUpdate: () => void;
 }
 
 export const AdsSection = ({
   filteredAds,
-  selectedCategory
+  selectedCategory,
+  currentUser,
+  onAdUpdate
 }: AdsSectionProps) => {
+  
+  const handleAdClick = (adId: string) => {
+    database.incrementViews(adId);
+    onAdUpdate();
+  };
   return (
     <section className="py-16 bg-gray-50" id="ads">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
